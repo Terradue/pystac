@@ -1,3 +1,5 @@
+"""Implementation of the STAC :stac-ext:`Product Extension <product>`."""
+
 from __future__ import annotations
 
 from collections.abc import Iterable
@@ -31,6 +33,7 @@ ACQUISITION_TYPE_PROP: str = PREFIX + "acquisition_type"
 
 class AcquisitionType(StringEnum):
     """Allowed values for product:acquisition_type."""
+
     NOMINAL = "nominal"
     CALIBRATION = "calibration"
     OTHER = "other"
@@ -166,14 +169,14 @@ class ProductExtension(
     @classmethod
     def get_schema_uri(cls) -> str:
         """
-        Gets the schema URI for the extension.
+        Return the published schema URI for this extension.
         """
         return SCHEMA_URI
 
     @classmethod
     def ext(cls, obj: T, add_if_missing: bool = False) -> ProductExtension[T]:
         """
-        Attach ProductExtension to an Item, Collection, Asset, or ItemAssetDefinition.
+        Extend an Item, Collection, Asset, or ItemAssetDefinition with product fields.
 
         Use add_if_missing=True to append SCHEMA_URI to stac_extensions
         on the owning Item/Collection when needed.
@@ -196,9 +199,9 @@ class ProductExtension(
     @classmethod
     def summaries(
         cls, obj: pystac.Collection, add_if_missing: bool = False
-    ) -> "SummariesProductExtension":
+    ) -> SummariesProductExtension:
         """
-        Attach SummariesProductExtension to a Collection.
+        Return the Product summaries helper for a collection.
 
         Use add_if_missing=True to append SCHEMA_URI to stac_extensions
         on the owning Collection when needed.
@@ -300,6 +303,8 @@ class ItemAssetsProductExtension(ProductExtension[pystac.ItemAssetDefinition]):
 
 
 class SummariesProductExtension(SummariesExtension):
+    """Concrete implementation for ``product:*`` values in collection summaries."""
+
     @property
     def product_type(self) -> list[str] | None:
         """
@@ -311,7 +316,7 @@ class SummariesProductExtension(SummariesExtension):
     def product_type(self, v: list[str] | None) -> None:
         """
         Set the product type in the summaries.
-        
+
         Args:
             v: The product type.
         """
@@ -370,9 +375,8 @@ class SummariesProductExtension(SummariesExtension):
 
 
 class ProductExtensionHooks(ExtensionHooks):
-    """
-    Hooks for the Product extension.
-    """
+    """Hook registration used when reading or migrating STAC objects."""
+
     schema_uri: str = SCHEMA_URI
     # Helpful for discovery/migration if you later add older schema URIs here
     prev_extension_ids = {"product"}

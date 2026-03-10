@@ -86,7 +86,7 @@ class ProcessingExpression:
     def expression(self, v: Any) -> None:
         """
         Set the expression of the processing expression.
-        
+
         Args:
             v: The expression value to set.
         """
@@ -104,9 +104,9 @@ class ProcessingExpression:
         self.expression = expression
 
     @classmethod
-    def create(cls, format: str, expression: Any) -> "ProcessingExpression":
+    def create(cls, format: str, expression: Any) -> ProcessingExpression:
         """
-        Create a new ProcessingExpression.
+        Create a new :class:`ProcessingExpression` from its component parts.
 
         Args:
             format: The format of the processing expression.
@@ -157,7 +157,7 @@ class ProcessingExtension(
     ) -> None:
         """
         Apply the processing extension.
-        
+
         Args:
             expression: The processing expression.
             lineage: The processing lineage.
@@ -189,7 +189,7 @@ class ProcessingExtension(
     def expression(self, v: ProcessingExpression | dict[str, Any] | None) -> None:
         """
         Set the processing expression.
-        
+
         Args:
             v: The processing expression to set.
         """
@@ -209,7 +209,7 @@ class ProcessingExtension(
     def lineage(self, v: str | None) -> None:
         """
         Set the processing lineage.
-        
+
         Args:
             v: The processing lineage to set.
         """
@@ -303,15 +303,13 @@ class ProcessingExtension(
     @classmethod
     def get_schema_uri(cls) -> str:
         """
-        Get the schema URI for the processing extension.
+        Return the published schema URI for this extension.
         """
         return SCHEMA_URI
 
     @classmethod
-    def ext(cls, obj: T, add_if_missing: bool = False) -> "ProcessingExtension[T]":
-        """
-        Get the ProcessingExtension for the given object.
-        """
+    def ext(cls, obj: T, add_if_missing: bool = False) -> ProcessingExtension[T]:
+        """Extend an Item, Asset, or ItemAssetDefinition with processing fields."""
         if isinstance(obj, pystac.Item):
             cls.ensure_has_extension(obj, add_if_missing)
             return cast(ProcessingExtension[T], ItemProcessingExtension(obj))
@@ -327,18 +325,14 @@ class ProcessingExtension(
     @classmethod
     def summaries(
         cls, obj: pystac.Collection, add_if_missing: bool = False
-    ) -> "SummariesProcessingExtension":
-        """
-        Helper wrapper for Collection.summaries.
-        """
+    ) -> SummariesProcessingExtension:
+        """Return the Processing summaries helper for a collection."""
         cls.ensure_has_extension(obj, add_if_missing)
         return SummariesProcessingExtension(obj)
 
     @classmethod
-    def provider(cls, provider: pystac.Provider) -> "ProviderProcessingExtension":
-        """
-        Helper wrapper for Provider objects (providers do not track stac_extensions).
-        """
+    def provider(cls, provider: pystac.Provider) -> ProviderProcessingExtension:
+        """Wrap a :class:`~pystac.Provider` with processing field accessors."""
         return ProviderProcessingExtension(provider)
 
 
@@ -368,6 +362,7 @@ class AssetProcessingExtension(ProcessingExtension[pystac.Asset]):
     """
     Processing extension for Asset objects.
     """
+
     asset_href: str
     properties: dict[str, Any]
     additional_read_properties: list[dict[str, Any]] | None = None
@@ -395,6 +390,7 @@ class ItemAssetsProcessingExtension(ProcessingExtension[pystac.ItemAssetDefiniti
     """
     Processing extension for ItemAssetDefinition objects.
     """
+
     asset_defn: pystac.ItemAssetDefinition
     properties: dict[str, Any]
 
@@ -432,7 +428,7 @@ class SummariesProcessingExtension(SummariesExtension):
     def expression(self, v: dict[str, Any] | None) -> None:
         """
         Set the processing expression summary.
-        
+
         Args:
             v: The processing expression summary to set.
         """
@@ -725,6 +721,8 @@ class ProviderProcessingExtension(PropertiesExtension):
 
 
 class ProcessingExtensionHooks(ExtensionHooks):
+    """Hook registration used when reading or migrating STAC objects."""
+
     schema_uri: str = SCHEMA_URI
     prev_extension_ids = {"processing"}
     stac_object_types = {

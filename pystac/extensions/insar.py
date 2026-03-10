@@ -1,3 +1,5 @@
+"""Implementation of the STAC :stac-ext:`InSAR Extension <insar>`."""
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -27,6 +29,7 @@ T = TypeVar("T", pystac.Item, pystac.Asset, pystac.ItemAssetDefinition)
 
 
 def _validated_number(v: float | int | None, field: str) -> float | None:
+    """Validate and normalize a numeric InSAR property value."""
     if v is None:
         return None
     if isinstance(v, bool) or not isinstance(v, (int, float)):
@@ -35,6 +38,7 @@ def _validated_number(v: float | int | None, field: str) -> float | None:
 
 
 def _validated_str(v: str | None, field: str) -> str | None:
+    """Validate a string-valued InSAR property."""
     if v is None:
         return None
     if not isinstance(v, str):
@@ -58,13 +62,16 @@ class InsarExtension(
 
     @classmethod
     def get_schema_uri(cls) -> str:
+        """Return the published schema URI for this extension."""
         return SCHEMA_URI
 
     # ---------------- factories ----------------
 
     @classmethod
-    def ext(cls, obj: T, add_if_missing: bool = False) -> "InsarExtension[T]":
+    def ext(cls, obj: T, add_if_missing: bool = False) -> InsarExtension[T]:
         """
+        Extend an Item, Asset, or ItemAssetDefinition with InSAR properties.
+
         Applies to:
           - Item (properties)
           - Asset (extra_fields), including Item and Collection assets
@@ -94,9 +101,9 @@ class InsarExtension(
     @classmethod
     def summaries(
         cls, obj: pystac.Collection, add_if_missing: bool = False
-    ) -> "SummariesInsarExtension":
+    ) -> SummariesInsarExtension:
         """
-        Collection-level InSAR lives under `collection.summaries`.
+        Return the InSAR summaries helper for a collection.
         """
         cls.ensure_has_extension(obj, add_if_missing)
         return SummariesInsarExtension(obj)
@@ -272,6 +279,7 @@ class ItemInsarExtension(InsarExtension[pystac.Item]):
     """
     Item extension for InSAR properties.
     """
+
     item: pystac.Item
     properties: dict[str, Any]
 
@@ -293,6 +301,7 @@ class AssetInsarExtension(InsarExtension[pystac.Asset]):
     """
     Asset extension for InSAR properties.
     """
+
     asset_href: str
     properties: dict[str, Any]
 
@@ -314,6 +323,7 @@ class ItemAssetsInsarExtension(InsarExtension[pystac.ItemAssetDefinition]):
     """
     ItemAssetDefinition extension for InSAR properties.
     """
+
     asset_defn: pystac.ItemAssetDefinition
     properties: dict[str, Any]
 
@@ -325,8 +335,7 @@ class ItemAssetsInsarExtension(InsarExtension[pystac.ItemAssetDefinition]):
         self.properties = item_asset.properties
 
     def __repr__(self) -> str:
-        """Returns a string representation of the ItemAssetsInsarExtension.
-        """
+        """Returns a string representation of the ItemAssetsInsarExtension."""
         return "<ItemAssetsInsarExtension ItemAssetDefinition>"
 
 
@@ -460,6 +469,8 @@ class SummariesInsarExtension(SummariesExtension):
 
 
 class InsarExtensionHooks(ExtensionHooks):
+    """Hook registration used when reading or migrating STAC objects."""
+
     schema_uri: str = SCHEMA_URI
     prev_extension_ids = {"insar"}
     stac_object_types = {
