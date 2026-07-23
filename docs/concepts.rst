@@ -736,7 +736,11 @@ Product extensions:
    from pystac.extensions.insar import InsarExtension
    from pystac.extensions.order import OrderExtension, OrderStatus
    from pystac.extensions.processing import ProcessingExtension
-   from pystac.extensions.product import AcquisitionType, ProductExtension
+   from pystac.extensions.product import (
+       AcquisitionType,
+       ProductExtension,
+       ProductStatus,
+   )
 
    item = pystac.Item(
        id="example",
@@ -768,6 +772,7 @@ Product extensions:
        timeliness="PT3H",
        timeliness_category="NRT",
        acquisition_type=AcquisitionType.NOMINAL,
+       status=ProductStatus.ACQUIRED,
    )
 
    ProcessingExtension.ext(item, add_if_missing=True).apply(
@@ -803,6 +808,10 @@ Product extensions:
    InsarExtension.summaries(collection, add_if_missing=True).processing_dem = "COPDEM"
    ProcessingExtension.summaries(collection).level = ["L1", "L2A"]
    ProductExtension.summaries(collection).product_type = ["SLC", "GRD"]
+   ProductExtension.summaries(collection).status = [
+       ProductStatus.PLANNED,
+       ProductStatus.ACQUIRED,
+   ]
    OrderExtension.summaries(collection).status = [
        OrderStatus.ORDERABLE,
        OrderStatus.ORDERED,
