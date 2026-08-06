@@ -8,6 +8,8 @@ import pytest
 import pystac
 from pystac.errors import RequiredPropertyMissing
 from pystac.extensions.order import (
+    ATTEMPT_LIMIT_PROP,
+    ATTEMPT_NUMBER_PROP,
     DATE_PROP,
     EXPIRATION_DATE_PROP,
     ID_PROP,
@@ -64,18 +66,32 @@ def test_item_apply_roundtrip() -> None:
     ext = OrderExtension.ext(item, add_if_missing=True)
 
     d = _dt("2024-01-01T10:00:00Z")
-    ext.apply(status=OrderStatus.ORDERED, order_id="123", date=d)
+    ext.apply(
+        status=OrderStatus.ORDERED,
+        order_id="123",
+        date=d,
+        attempt_limit=3,
+        attempt_number=1,
+    )
 
     assert item.properties[STATUS_PROP] == "ordered"
     assert item.properties[ID_PROP] == "123"
     assert item.properties[DATE_PROP].endswith("Z")
+    assert item.properties[ATTEMPT_LIMIT_PROP] == 3
+    assert item.properties[ATTEMPT_NUMBER_PROP] == 1
     assert ext.status == OrderStatus.ORDERED
     assert ext.order_id == "123"
     assert ext.date == d
+    assert ext.attempt_limit == 3
+    assert ext.attempt_number == 1
 
     # pop_if_none on optional fields
     ext.order_id = None
     assert ID_PROP not in item.properties
+    ext.attempt_limit = None
+    ext.attempt_number = None
+    assert ATTEMPT_LIMIT_PROP not in item.properties
+    assert ATTEMPT_NUMBER_PROP not in item.properties
 
 
 def test_collection_top_level_fields() -> None:
@@ -84,9 +100,13 @@ def test_collection_top_level_fields() -> None:
 
     ext.status = OrderStatus.PENDING
     ext.order_id = "abc"
+    ext.attempt_limit = 5
+    ext.attempt_number = 0
 
     assert col.extra_fields[STATUS_PROP] == "pending"
     assert col.extra_fields[ID_PROP] == "abc"
+    assert col.extra_fields[ATTEMPT_LIMIT_PROP] == 5
+    assert col.extra_fields[ATTEMPT_NUMBER_PROP] == 0
 
 
 def test_asset_owner_type_validation() -> None:
@@ -125,8 +145,14 @@ def test_summaries_wrapper_sets_lists() -> None:
     sext = OrderExtension.summaries(col, add_if_missing=True)
 
     sext.status = [OrderStatus.ORDERABLE, OrderStatus.ORDERED]
+    sext.attempt_limit = [1, 3]
+    sext.attempt_number = [0, 1, 2]
 
     assert col.summaries.lists[STATUS_PROP] == [
         OrderStatus.ORDERABLE,
         OrderStatus.ORDERED,
     ]
+    assert col.summaries.lists[ATTEMPT_LIMIT_PROP] == [1, 3]
+    assert col.summaries.lists[ATTEMPT_NUMBER_PROP] == [0, 1, 2]
+    assert sext.attempt_limit == [1, 3]
+    assert sext.attempt_number == [0, 1, 2]

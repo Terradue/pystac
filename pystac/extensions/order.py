@@ -41,6 +41,8 @@ PREFIX: str = "order:"
 STATUS_PROP: str = PREFIX + "status"
 ID_PROP: str = PREFIX + "id"
 DATE_PROP: str = PREFIX + "date"
+ATTEMPT_LIMIT_PROP: str = PREFIX + "attempt_limit"
+ATTEMPT_NUMBER_PROP: str = PREFIX + "attempt_number"
 EXPIRATION_DATE_PROP: str = PREFIX + "expiration_date"  # deprecated in schema
 
 
@@ -79,6 +81,8 @@ class OrderExtension(
         status: OrderStatus,
         order_id: str | None = None,
         date: datetime | None = None,
+        attempt_limit: int | None = None,
+        attempt_number: int | None = None,
         expiration_date: datetime | None = None,
     ) -> None:
         """
@@ -88,11 +92,15 @@ class OrderExtension(
             status: Required order status.
             order_id: Optional order identifier.
             date: Optional order datetime (serialized as RFC3339/ISO8601 in UTC).
+            attempt_limit: Optional maximum number of ordering attempts.
+            attempt_number: Optional number of ordering attempts initiated.
             expiration_date: Deprecated in the schema; preserved for compatibility.
         """
         self.status = status
         self.order_id = order_id
         self.date = date
+        self.attempt_limit = attempt_limit
+        self.attempt_number = attempt_number
         if expiration_date is not None:
             self.expiration_date = expiration_date
 
@@ -157,6 +165,37 @@ class OrderExtension(
             v: The order datetime to set.
         """
         self._set_property(DATE_PROP, map_opt(datetime_to_str, v), pop_if_none=True)
+
+    @property
+    def attempt_limit(self) -> int | None:
+        """Get the maximum number of ordering attempts allowed."""
+        return self._get_property(ATTEMPT_LIMIT_PROP, int)
+
+    @attempt_limit.setter
+    def attempt_limit(self, v: int | None) -> None:
+        """
+        Set the maximum number of ordering attempts allowed.
+
+        Args:
+            v: The attempt limit to set. The schema requires values greater than or
+                equal to one.
+        """
+        self._set_property(ATTEMPT_LIMIT_PROP, v, pop_if_none=True)
+
+    @property
+    def attempt_number(self) -> int | None:
+        """Get the number of ordering attempts initiated."""
+        return self._get_property(ATTEMPT_NUMBER_PROP, int)
+
+    @attempt_number.setter
+    def attempt_number(self, v: int | None) -> None:
+        """
+        Set the number of ordering attempts initiated.
+
+        Args:
+            v: The attempt number to set. The schema requires non-negative values.
+        """
+        self._set_property(ATTEMPT_NUMBER_PROP, v, pop_if_none=True)
 
     @property
     def expiration_date(self) -> datetime | None:
@@ -375,6 +414,36 @@ class SummariesOrderExtension(SummariesExtension):
             v: The expiration date to set.
         """
         self._set_summary(DATE_PROP, v)
+
+    @property
+    def attempt_limit(self) -> list[int] | None:
+        """Get the summarized order attempt limits."""
+        return self.summaries.get_list(ATTEMPT_LIMIT_PROP)
+
+    @attempt_limit.setter
+    def attempt_limit(self, v: list[int] | None) -> None:
+        """
+        Set the summarized order attempt limits.
+
+        Args:
+            v: The attempt limits to set.
+        """
+        self._set_summary(ATTEMPT_LIMIT_PROP, v)
+
+    @property
+    def attempt_number(self) -> list[int] | None:
+        """Get the summarized order attempt numbers."""
+        return self.summaries.get_list(ATTEMPT_NUMBER_PROP)
+
+    @attempt_number.setter
+    def attempt_number(self, v: list[int] | None) -> None:
+        """
+        Set the summarized order attempt numbers.
+
+        Args:
+            v: The attempt numbers to set.
+        """
+        self._set_summary(ATTEMPT_NUMBER_PROP, v)
 
 
 class OrderExtensionHooks(ExtensionHooks):
