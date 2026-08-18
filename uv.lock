@@ -4012,7 +4012,7 @@ requires-dist = [{ name = "python-dateutil", specifier = ">=2.7.0" }]
 
 [[package]]
 name = "pystac-ext-classification"
-version = "2.0.0"
+version = "2.0.1"
 source = { editable = "extensions/classification" }
 dependencies = [
     { name = "pystac-core" },
@@ -4027,7 +4027,7 @@ requires-dist = [
 
 [[package]]
 name = "pystac-ext-datacube"
-version = "2.2.0"
+version = "2.2.1"
 source = { editable = "extensions/datacube" }
 dependencies = [
     { name = "pystac-core" },
@@ -4038,7 +4038,7 @@ requires-dist = [{ name = "pystac-core", editable = "core" }]
 
 [[package]]
 name = "pystac-ext-eo"
-version = "1.1.0"
+version = "1.1.1"
 source = { editable = "extensions/eo" }
 dependencies = [
     { name = "pystac-core" },
@@ -4055,7 +4055,7 @@ requires-dist = [
 
 [[package]]
 name = "pystac-ext-file"
-version = "2.1.0"
+version = "2.1.1"
 source = { editable = "extensions/file" }
 dependencies = [
     { name = "pystac-core" },
@@ -4066,7 +4066,7 @@ requires-dist = [{ name = "pystac-core", editable = "core" }]
 
 [[package]]
 name = "pystac-ext-grid"
-version = "1.1.0"
+version = "1.1.1"
 source = { editable = "extensions/grid" }
 dependencies = [
     { name = "pystac-core" },
@@ -4077,7 +4077,7 @@ requires-dist = [{ name = "pystac-core", editable = "core" }]
 
 [[package]]
 name = "pystac-ext-item-assets"
-version = "1.0.0"
+version = "1.0.1"
 source = { editable = "extensions/item_assets" }
 dependencies = [
     { name = "pystac-core" },
@@ -4088,7 +4088,7 @@ requires-dist = [{ name = "pystac-core", editable = "core" }]
 
 [[package]]
 name = "pystac-ext-label"
-version = "1.0.1"
+version = "1.0.2"
 source = { editable = "extensions/label" }
 dependencies = [
     { name = "pystac-core" },
@@ -4099,7 +4099,7 @@ requires-dist = [{ name = "pystac-core", editable = "core" }]
 
 [[package]]
 name = "pystac-ext-mgrs"
-version = "1.0.0"
+version = "1.0.1"
 source = { editable = "extensions/mgrs" }
 dependencies = [
     { name = "pystac-core" },
@@ -4110,7 +4110,7 @@ requires-dist = [{ name = "pystac-core", editable = "core" }]
 
 [[package]]
 name = "pystac-ext-mlm"
-version = "1.4.0"
+version = "1.4.1"
 source = { editable = "extensions/mlm" }
 dependencies = [
     { name = "pystac-core" },
@@ -4127,7 +4127,7 @@ requires-dist = [
 
 [[package]]
 name = "pystac-ext-pointcloud"
-version = "1.0.0"
+version = "1.0.1"
 source = { editable = "extensions/pointcloud" }
 dependencies = [
     { name = "pystac-core" },
@@ -4149,7 +4149,7 @@ requires-dist = [{ name = "pystac-core", editable = "core" }]
 
 [[package]]
 name = "pystac-ext-projection"
-version = "2.0.0"
+version = "2.0.1"
 source = { editable = "extensions/projection" }
 dependencies = [
     { name = "pystac-core" },
@@ -4160,7 +4160,7 @@ requires-dist = [{ name = "pystac-core", editable = "core" }]
 
 [[package]]
 name = "pystac-ext-raster"
-version = "1.1.0"
+version = "1.1.1"
 source = { editable = "extensions/raster" }
 dependencies = [
     { name = "pystac-core" },
@@ -4182,7 +4182,7 @@ requires-dist = [{ name = "pystac-core", editable = "core" }]
 
 [[package]]
 name = "pystac-ext-sar"
-version = "1.0.0"
+version = "1.0.1"
 source = { editable = "extensions/sar" }
 dependencies = [
     { name = "pystac-core" },
@@ -4193,7 +4193,7 @@ requires-dist = [{ name = "pystac-core", editable = "core" }]
 
 [[package]]
 name = "pystac-ext-sat"
-version = "1.0.0"
+version = "1.0.1"
 source = { editable = "extensions/sat" }
 dependencies = [
     { name = "pystac-core" },
@@ -4204,7 +4204,7 @@ requires-dist = [{ name = "pystac-core", editable = "core" }]
 
 [[package]]
 name = "pystac-ext-scientific"
-version = "1.0.0"
+version = "1.0.1"
 source = { editable = "extensions/scientific" }
 dependencies = [
     { name = "pystac-core" },
@@ -4215,7 +4215,7 @@ requires-dist = [{ name = "pystac-core", editable = "core" }]
 
 [[package]]
 name = "pystac-ext-storage"
-version = "2.0.0"
+version = "2.0.1"
 source = { editable = "extensions/storage" }
 dependencies = [
     { name = "pystac-core" },
@@ -4226,7 +4226,7 @@ requires-dist = [{ name = "pystac-core", editable = "core" }]
 
 [[package]]
 name = "pystac-ext-table"
-version = "1.2.0"
+version = "1.2.1"
 source = { editable = "extensions/table" }
 dependencies = [
     { name = "pystac-core" },
@@ -4237,7 +4237,7 @@ requires-dist = [{ name = "pystac-core", editable = "core" }]
 
 [[package]]
 name = "pystac-ext-timestamps"
-version = "1.1.0"
+version = "1.1.1"
 source = { editable = "extensions/timestamps" }
 dependencies = [
     { name = "pystac-core" },
@@ -4248,7 +4248,7 @@ requires-dist = [{ name = "pystac-core", editable = "core" }]
 
 [[package]]
 name = "pystac-ext-version"
-version = "1.2.0"
+version = "1.2.1"
 source = { editable = "extensions/version" }
 dependencies = [
     { name = "pystac-core" },
@@ -4259,7 +4259,7 @@ requires-dist = [{ name = "pystac-core", editable = "core" }]
 
 [[package]]
 name = "pystac-ext-view"
-version = "1.0.0"
+version = "1.0.1"
 source = { editable = "extensions/view" }
 dependencies = [
     { name = "pystac-core" },
@@ -4270,7 +4270,7 @@ requires-dist = [{ name = "pystac-core", editable = "core" }]
 
 [[package]]
 name = "pystac-ext-xarray-assets"
-version = "1.0.0"
+version = "1.0.1"
 source = { editable = "extensions/xarray_assets" }
 dependencies = [
     { name = "pystac-core" },
