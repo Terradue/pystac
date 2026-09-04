@@ -11,6 +11,13 @@ from pystac.collection import Collection
 from pystac.errors import RequiredPropertyMissing
 from pystac.extensions.storage import (
     StorageExtension,
+    StorageLifecycle,
+    StorageLifecycleAction,
+    StorageLifecycleActionType,
+    StorageLifecycleManagedBy,
+    StorageLifecycleRule,
+    StorageLifecycleTrigger,
+    StorageLifecycleTriggerType,
     StorageScheme,
     StorageSchemeType,
 )
@@ -346,6 +353,160 @@ def test_storage_scheme_equality(sample_scheme: StorageScheme) -> None:
     assert sample_scheme != other
 
     assert sample_scheme != object()
+
+
+def test_storage_lifecycle_trigger_factories() -> None:
+    manual = StorageLifecycleTrigger.create_manual()
+    assert manual.type == StorageLifecycleTriggerType.MANUAL
+    assert manual.to_dict() == {"type": "manual"}
+
+    datetime = StorageLifecycleTrigger.create_datetime("/properties/expires")
+    assert datetime.type == StorageLifecycleTriggerType.DATETIME
+    assert datetime.at == "/properties/expires"
+
+    age = StorageLifecycleTrigger.create_age("/properties/datetime", "P30D")
+    assert age.type == StorageLifecycleTriggerType.AGE
+    assert age.from_ == "/properties/datetime"
+    assert age.after == "P30D"
+
+    age.from_ = "/properties/created"
+    age.after = None
+    assert age.to_dict() == {
+        "type": "age",
+        "from": "/properties/created",
+    }
+
+
+def test_storage_lifecycle_action_factories() -> None:
+    transition = StorageLifecycleAction.create_transition("cold")
+    assert transition.type == StorageLifecycleActionType.TRANSITION
+    assert transition.target == "cold"
+
+    transition.target = "hot"
+    assert transition.to_dict() == {"type": "transition", "target": "hot"}
+
+    expire = StorageLifecycleAction.create_expire()
+    assert expire.type == StorageLifecycleActionType.EXPIRE
+    assert expire.target is None
+    assert expire.to_dict() == {"type": "expire"}
+
+
+def test_storage_scheme_lifecycle_round_trip(sample_scheme: StorageScheme) -> None:
+    transition_rule = StorageLifecycleRule.create(
+        id="transition-to-cold",
+        title="Move expired item to cold storage",
+        trigger=StorageLifecycleTrigger.create_datetime("/properties/expires"),
+        action=StorageLifecycleAction.create_transition("cold"),
+    )
+    lifecycle = StorageLifecycle.create(
+        managed_by=StorageLifecycleManagedBy.PROVIDER,
+        rules=[transition_rule],
+    )
+
+    sample_scheme.lifecycle = lifecycle
+
+    serialized = sample_scheme.to_dict()
+    assert serialized["lifecycle"] == {
+        "managed_by": "provider",
+        "rules": [
+            {
+                "id": "transition-to-cold",
+                "title": "Move expired item to cold storage",
+                "trigger": {"type": "datetime", "at": "/properties/expires"},
+                "action": {"type": "transition", "target": "cold"},
+            }
+        ],
+    }
+
+    parsed_lifecycle = sample_scheme.lifecycle
+    assert parsed_lifecycle is not None
+    assert parsed_lifecycle.managed_by == StorageLifecycleManagedBy.PROVIDER
+    assert parsed_lifecycle.rules[0].id == "transition-to-cold"
+    assert parsed_lifecycle.rules[0].trigger.at == "/properties/expires"
+    assert parsed_lifecycle.rules[0].action.target == "cold"
+
+    parsed_lifecycle.rules[0].action.target = "hot"
+    parsed_lifecycle.add_rule(
+        StorageLifecycleRule.create(
+            id="expire",
+            trigger=StorageLifecycleTrigger.create_manual(),
+            action=StorageLifecycleAction.create_expire(),
+        )
+    )
+    assert serialized["lifecycle"]["rules"][0]["action"]["target"] == "hot"
+    assert len(serialized["lifecycle"]["rules"]) == 2
+
+    sample_scheme.lifecycle = None
+    assert sample_scheme.lifecycle is None
+    assert "lifecycle" not in sample_scheme.to_dict()
+
+
+def test_storage_scheme_create_accepts_raw_lifecycle() -> None:
+    raw_lifecycle = {
+        "managed_by": "application",
+        "rules": [
+            {
+                "id": "expire",
+                "trigger": {"type": "manual"},
+                "action": {"type": "expire"},
+            }
+        ],
+    }
+    scheme = StorageScheme.create(
+        type=StorageSchemeType.CUSTOM_S3,
+        platform="https://{bucket}.storage.example.com",
+        lifecycle=raw_lifecycle,
+    )
+
+    assert scheme.lifecycle == StorageLifecycle(raw_lifecycle)
+    assert scheme.lifecycle is not None
+    assert scheme.lifecycle.rules[0].action.type == StorageLifecycleActionType.EXPIRE
+
+
+def test_storage_extension_lifecycle_round_trip(naip_item: Item) -> None:
+    lifecycle = StorageLifecycle.create(
+        rules=[
+            StorageLifecycleRule.create(
+                id="transition-after-30-days",
+                trigger=StorageLifecycleTrigger.create_age(
+                    "/properties/datetime", "P30D"
+                ),
+                action=StorageLifecycleAction.create_transition("cold"),
+            )
+        ]
+    )
+    storage_ext = StorageExtension.ext(naip_item)
+    storage_ext.add_scheme(
+        "managed-s3",
+        StorageScheme.create(
+            type=StorageSchemeType.AWS_S3,
+            platform="s3://{bucket}/{key}",
+            lifecycle=lifecycle,
+        ),
+    )
+
+    stored_lifecycle = storage_ext.schemes["managed-s3"].lifecycle
+    assert stored_lifecycle is not None
+    assert stored_lifecycle.rules[0].trigger.after == "P30D"
+
+    stored_lifecycle.rules[0].trigger.after = "P60D"
+    assert (
+        naip_item.properties["storage:schemes"]["managed-s3"]["lifecycle"]["rules"][0][
+            "trigger"
+        ]["after"]
+        == "P60D"
+    )
+
+
+def test_storage_lifecycle_required_properties() -> None:
+    with pytest.raises(RequiredPropertyMissing, match="rules"):
+        _ = StorageLifecycle({}).rules
+
+    with pytest.raises(RequiredPropertyMissing, match="trigger"):
+        _ = StorageLifecycleRule({}).trigger
+
+    with pytest.raises(RequiredPropertyMissing, match="type"):
+        _ = StorageLifecycleTrigger({}).type
 
 
 def test_item_asset_accessor() -> None:

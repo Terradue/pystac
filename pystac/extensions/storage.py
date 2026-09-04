@@ -56,12 +56,274 @@ TYPE_PROP: str = "type"
 PLATFORM_PROP: str = "platform"
 REGION_PROP: str = "region"
 REQUESTER_PAYS_PROP: str = "requester_pays"
+LIFECYCLE_PROP: str = "lifecycle"
+
+# Storage lifecycle object names
+MANAGED_BY_PROP: str = "managed_by"
+RULES_PROP: str = "rules"
+ID_PROP: str = "id"
+TITLE_PROP: str = "title"
+TRIGGER_PROP: str = "trigger"
+ACTION_PROP: str = "action"
+AT_PROP: str = "at"
+FROM_PROP: str = "from"
+AFTER_PROP: str = "after"
+TARGET_PROP: str = "target"
 
 
 class StorageSchemeType(StringEnum):
     AWS_S3 = "aws-s3"
     CUSTOM_S3 = "custom-s3"
     AZURE = "ms-azure"
+
+
+class StorageLifecycleManagedBy(StringEnum):
+    """Identifies which system enforces a storage lifecycle."""
+
+    PROVIDER = "provider"
+    APPLICATION = "application"
+
+
+class StorageLifecycleTriggerType(StringEnum):
+    """The event or condition that starts a storage lifecycle rule."""
+
+    MANUAL = "manual"
+    DATETIME = "datetime"
+    AGE = "age"
+
+
+class StorageLifecycleActionType(StringEnum):
+    """The operation performed by a storage lifecycle rule."""
+
+    TRANSITION = "transition"
+    EXPIRE = "expire"
+
+
+class _StorageObject:
+    """Base class for dictionary-backed storage extension objects."""
+
+    def __init__(self, properties: dict[str, Any]) -> None:
+        self._properties = properties
+
+    def __eq__(self, other: Any) -> bool:
+        if type(self) is not type(other):
+            return NotImplemented
+        return bool(self._properties == cast(_StorageObject, other)._properties)
+
+    def to_dict(self) -> dict[str, Any]:
+        """Returns the dictionary backing this object."""
+        return self._properties
+
+
+class StorageLifecycleTrigger(_StorageObject):
+    """A trigger for a :class:`StorageLifecycleRule`."""
+
+    @classmethod
+    def create_manual(cls) -> StorageLifecycleTrigger:
+        """Creates a trigger that is invoked manually."""
+        return cls({TYPE_PROP: StorageLifecycleTriggerType.MANUAL})
+
+    @classmethod
+    def create_datetime(cls, at: str) -> StorageLifecycleTrigger:
+        """Creates a trigger for the datetime at the JSON Pointer ``at``."""
+        return cls({TYPE_PROP: StorageLifecycleTriggerType.DATETIME, AT_PROP: at})
+
+    @classmethod
+    def create_age(cls, from_: str, after: str) -> StorageLifecycleTrigger:
+        """Creates a trigger for a duration after the JSON Pointer ``from_``."""
+        return cls(
+            {
+                TYPE_PROP: StorageLifecycleTriggerType.AGE,
+                FROM_PROP: from_,
+                AFTER_PROP: after,
+            }
+        )
+
+    @property
+    def type(self) -> str:
+        """Gets or sets the trigger type."""
+        return cast(str, get_required(self._properties.get(TYPE_PROP), self, TYPE_PROP))
+
+    @type.setter
+    def type(self, v: str) -> None:
+        self._properties[TYPE_PROP] = v
+
+    @property
+    def at(self) -> str | None:
+        """Gets or sets the JSON Pointer used by a ``datetime`` trigger."""
+        return self._properties.get(AT_PROP)
+
+    @at.setter
+    def at(self, v: str | None) -> None:
+        if v is not None:
+            self._properties[AT_PROP] = v
+        else:
+            self._properties.pop(AT_PROP, None)
+
+    @property
+    def from_(self) -> str | None:
+        """Gets or sets the JSON Pointer used as the origin of an age trigger."""
+        return self._properties.get(FROM_PROP)
+
+    @from_.setter
+    def from_(self, v: str | None) -> None:
+        if v is not None:
+            self._properties[FROM_PROP] = v
+        else:
+            self._properties.pop(FROM_PROP, None)
+
+    @property
+    def after(self) -> str | None:
+        """Gets or sets the ISO 8601 duration used by an age trigger."""
+        return self._properties.get(AFTER_PROP)
+
+    @after.setter
+    def after(self, v: str | None) -> None:
+        if v is not None:
+            self._properties[AFTER_PROP] = v
+        else:
+            self._properties.pop(AFTER_PROP, None)
+
+
+class StorageLifecycleAction(_StorageObject):
+    """An action performed by a :class:`StorageLifecycleRule`."""
+
+    @classmethod
+    def create_transition(cls, target: str) -> StorageLifecycleAction:
+        """Creates an action that transitions data to ``target`` storage."""
+        return cls(
+            {TYPE_PROP: StorageLifecycleActionType.TRANSITION, TARGET_PROP: target}
+        )
+
+    @classmethod
+    def create_expire(cls) -> StorageLifecycleAction:
+        """Creates an action that expires data."""
+        return cls({TYPE_PROP: StorageLifecycleActionType.EXPIRE})
+
+    @property
+    def type(self) -> str:
+        """Gets or sets the action type."""
+        return cast(str, get_required(self._properties.get(TYPE_PROP), self, TYPE_PROP))
+
+    @type.setter
+    def type(self, v: str) -> None:
+        self._properties[TYPE_PROP] = v
+
+    @property
+    def target(self) -> str | None:
+        """Gets or sets the target storage class of a transition action."""
+        return self._properties.get(TARGET_PROP)
+
+    @target.setter
+    def target(self, v: str | None) -> None:
+        if v is not None:
+            self._properties[TARGET_PROP] = v
+        else:
+            self._properties.pop(TARGET_PROP, None)
+
+
+class StorageLifecycleRule(_StorageObject):
+    """A rule combining a storage lifecycle trigger and action."""
+
+    @classmethod
+    def create(
+        cls,
+        id: str,
+        trigger: StorageLifecycleTrigger,
+        action: StorageLifecycleAction,
+        title: str | None = None,
+    ) -> StorageLifecycleRule:
+        """Creates a storage lifecycle rule."""
+        rule = cls({})
+        rule.id = id
+        rule.title = title
+        rule.trigger = trigger
+        rule.action = action
+        return rule
+
+    @property
+    def id(self) -> str:
+        """Gets or sets the rule identifier."""
+        return cast(str, get_required(self._properties.get(ID_PROP), self, ID_PROP))
+
+    @id.setter
+    def id(self, v: str) -> None:
+        self._properties[ID_PROP] = v
+
+    @property
+    def title(self) -> str | None:
+        """Gets or sets the human-readable rule title."""
+        return self._properties.get(TITLE_PROP)
+
+    @title.setter
+    def title(self, v: str | None) -> None:
+        if v is not None:
+            self._properties[TITLE_PROP] = v
+        else:
+            self._properties.pop(TITLE_PROP, None)
+
+    @property
+    def trigger(self) -> StorageLifecycleTrigger:
+        """Gets or sets the rule trigger."""
+        trigger = get_required(self._properties.get(TRIGGER_PROP), self, TRIGGER_PROP)
+        return StorageLifecycleTrigger(trigger)
+
+    @trigger.setter
+    def trigger(self, v: StorageLifecycleTrigger) -> None:
+        self._properties[TRIGGER_PROP] = v.to_dict()
+
+    @property
+    def action(self) -> StorageLifecycleAction:
+        """Gets or sets the rule action."""
+        action = get_required(self._properties.get(ACTION_PROP), self, ACTION_PROP)
+        return StorageLifecycleAction(action)
+
+    @action.setter
+    def action(self, v: StorageLifecycleAction) -> None:
+        self._properties[ACTION_PROP] = v.to_dict()
+
+
+class StorageLifecycle(_StorageObject):
+    """Storage lifecycle configuration associated with a storage scheme."""
+
+    @classmethod
+    def create(
+        cls,
+        rules: list[StorageLifecycleRule],
+        managed_by: str | None = None,
+    ) -> StorageLifecycle:
+        """Creates a storage lifecycle configuration."""
+        lifecycle = cls({})
+        lifecycle.managed_by = managed_by
+        lifecycle.rules = rules
+        return lifecycle
+
+    @property
+    def managed_by(self) -> str | None:
+        """Gets or sets the system responsible for enforcing the lifecycle."""
+        return self._properties.get(MANAGED_BY_PROP)
+
+    @managed_by.setter
+    def managed_by(self, v: str | None) -> None:
+        if v is not None:
+            self._properties[MANAGED_BY_PROP] = v
+        else:
+            self._properties.pop(MANAGED_BY_PROP, None)
+
+    @property
+    def rules(self) -> list[StorageLifecycleRule]:
+        """Gets or sets the lifecycle rules."""
+        rules = get_required(self._properties.get(RULES_PROP), self, RULES_PROP)
+        return [StorageLifecycleRule(rule) for rule in rules]
+
+    @rules.setter
+    def rules(self, v: list[StorageLifecycleRule]) -> None:
+        self._properties[RULES_PROP] = [rule.to_dict() for rule in v]
+
+    def add_rule(self, rule: StorageLifecycleRule) -> None:
+        """Adds a rule to the lifecycle."""
+        rules = get_required(self._properties.get(RULES_PROP), self, RULES_PROP)
+        rules.append(rule.to_dict())
 
 
 class StorageScheme:
@@ -72,7 +334,7 @@ class StorageScheme:
     any arbitrary property.
     """
 
-    _known_fields = {"type", "platform", "region", "requester_pays"}
+    _known_fields = {"type", "platform", "region", "requester_pays", "lifecycle"}
     _properties: dict[str, Any]
 
     def __init__(self, properties: dict[str, Any]):
@@ -113,12 +375,14 @@ class StorageScheme:
         platform: str,
         region: str | None = None,
         requester_pays: bool | None = None,
+        lifecycle: StorageLifecycle | dict[str, Any] | None = None,
         **kwargs: Any,
     ) -> None:
         self.type = type
         self.platform = platform
         self.region = region
         self.requester_pays = requester_pays
+        self.lifecycle = lifecycle
         self._properties.update(kwargs)
 
     @classmethod
@@ -128,6 +392,7 @@ class StorageScheme:
         platform: str,
         region: str | None = None,
         requester_pays: bool | None = None,
+        lifecycle: StorageLifecycle | dict[str, Any] | None = None,
         **kwargs: Any,
     ) -> StorageScheme:
         """Set the properties for a new StorageScheme object.
@@ -143,6 +408,8 @@ class StorageScheme:
                 Defaults to None.
             requester_pays (bool | None): requester pays or data manager/cloud
                 provider pays. Defaults to None.
+            lifecycle (StorageLifecycle | dict[str, Any] | None): Storage lifecycle
+                configuration. Defaults to None.
             kwargs (dict[str | Any]): Additional properties to set on scheme
 
         Returns:
@@ -154,6 +421,7 @@ class StorageScheme:
             platform=platform,
             region=region,
             requester_pays=requester_pays,
+            lifecycle=lifecycle,
             **kwargs,
         )
         return c
@@ -221,6 +489,20 @@ class StorageScheme:
             self._properties[REQUESTER_PAYS_PROP] = v
         else:
             self._properties.pop(REQUESTER_PAYS_PROP, None)
+
+    @property
+    def lifecycle(self) -> StorageLifecycle | None:
+        """Gets or sets the storage lifecycle configuration."""
+        return map_opt(StorageLifecycle, self._properties.get(LIFECYCLE_PROP))
+
+    @lifecycle.setter
+    def lifecycle(self, v: StorageLifecycle | dict[str, Any] | None) -> None:
+        if isinstance(v, StorageLifecycle):
+            self._properties[LIFECYCLE_PROP] = v.to_dict()
+        elif v is not None:
+            self._properties[LIFECYCLE_PROP] = v
+        else:
+            self._properties.pop(LIFECYCLE_PROP, None)
 
     def to_dict(self) -> dict[str, Any]:
         """
