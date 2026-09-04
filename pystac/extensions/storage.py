@@ -55,6 +55,7 @@ SCHEMES_PROP: str = PREFIX + "schemes"
 TYPE_PROP: str = "type"
 PLATFORM_PROP: str = "platform"
 REGION_PROP: str = "region"
+STORAGE_CLASS_PROP: str = "storage_class"
 REQUESTER_PAYS_PROP: str = "requester_pays"
 LIFECYCLE_PROP: str = "lifecycle"
 
@@ -190,7 +191,7 @@ class StorageLifecycleAction(_StorageObject):
 
     @classmethod
     def create_transition(cls, target: str) -> StorageLifecycleAction:
-        """Creates an action that transitions data to ``target`` storage."""
+        """Creates an action that transitions data to the ``target`` scheme."""
         return cls(
             {TYPE_PROP: StorageLifecycleActionType.TRANSITION, TARGET_PROP: target}
         )
@@ -334,7 +335,14 @@ class StorageScheme:
     any arbitrary property.
     """
 
-    _known_fields = {"type", "platform", "region", "requester_pays", "lifecycle"}
+    _known_fields = {
+        "type",
+        "platform",
+        "region",
+        "storage_class",
+        "requester_pays",
+        "lifecycle",
+    }
     _properties: dict[str, Any]
 
     def __init__(self, properties: dict[str, Any]):
@@ -376,6 +384,7 @@ class StorageScheme:
         region: str | None = None,
         requester_pays: bool | None = None,
         lifecycle: StorageLifecycle | dict[str, Any] | None = None,
+        storage_class: str | None = None,
         **kwargs: Any,
     ) -> None:
         self.type = type
@@ -383,6 +392,7 @@ class StorageScheme:
         self.region = region
         self.requester_pays = requester_pays
         self.lifecycle = lifecycle
+        self.storage_class = storage_class
         self._properties.update(kwargs)
 
     @classmethod
@@ -393,6 +403,7 @@ class StorageScheme:
         region: str | None = None,
         requester_pays: bool | None = None,
         lifecycle: StorageLifecycle | dict[str, Any] | None = None,
+        storage_class: str | None = None,
         **kwargs: Any,
     ) -> StorageScheme:
         """Set the properties for a new StorageScheme object.
@@ -410,6 +421,8 @@ class StorageScheme:
                 provider pays. Defaults to None.
             lifecycle (StorageLifecycle | dict[str, Any] | None): Storage lifecycle
                 configuration. Defaults to None.
+            storage_class (str | None): Provider-specific storage class or access
+                tier. Defaults to None.
             kwargs (dict[str | Any]): Additional properties to set on scheme
 
         Returns:
@@ -422,6 +435,7 @@ class StorageScheme:
             region=region,
             requester_pays=requester_pays,
             lifecycle=lifecycle,
+            storage_class=storage_class,
             **kwargs,
         )
         return c
@@ -489,6 +503,18 @@ class StorageScheme:
             self._properties[REQUESTER_PAYS_PROP] = v
         else:
             self._properties.pop(REQUESTER_PAYS_PROP, None)
+
+    @property
+    def storage_class(self) -> str | None:
+        """Gets or sets the provider-specific storage class or access tier."""
+        return self._properties.get(STORAGE_CLASS_PROP)
+
+    @storage_class.setter
+    def storage_class(self, v: str | None) -> None:
+        if v is not None:
+            self._properties[STORAGE_CLASS_PROP] = v
+        else:
+            self._properties.pop(STORAGE_CLASS_PROP, None)
 
     @property
     def lifecycle(self) -> StorageLifecycle | None:

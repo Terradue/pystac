@@ -355,6 +355,24 @@ def test_storage_scheme_equality(sample_scheme: StorageScheme) -> None:
     assert sample_scheme != object()
 
 
+def test_storage_scheme_storage_class() -> None:
+    scheme = StorageScheme.create(
+        type=StorageSchemeType.AWS_S3,
+        platform="https://{bucket}.s3.{region}.amazonaws.com",
+        storage_class="STANDARD",
+    )
+
+    assert scheme.storage_class == "STANDARD"
+    assert scheme.to_dict()["storage_class"] == "STANDARD"
+
+    scheme.storage_class = "DEEP_ARCHIVE"
+    assert scheme.storage_class == "DEEP_ARCHIVE"
+
+    scheme.storage_class = None
+    assert scheme.storage_class is None
+    assert "storage_class" not in scheme.to_dict()
+
+
 def test_storage_lifecycle_trigger_factories() -> None:
     manual = StorageLifecycleTrigger.create_manual()
     assert manual.type == StorageLifecycleTriggerType.MANUAL
