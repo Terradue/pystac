@@ -62,8 +62,6 @@ LIFECYCLE_PROP: str = "lifecycle"
 # Storage lifecycle object names
 MANAGED_BY_PROP: str = "managed_by"
 RULES_PROP: str = "rules"
-ID_PROP: str = "id"
-TITLE_PROP: str = "title"
 TRIGGER_PROP: str = "trigger"
 ACTION_PROP: str = "action"
 AT_PROP: str = "at"
@@ -88,7 +86,6 @@ class StorageLifecycleManagedBy(StringEnum):
 class StorageLifecycleTriggerType(StringEnum):
     """The event or condition that starts a storage lifecycle rule."""
 
-    MANUAL = "manual"
     DATETIME = "datetime"
     AGE = "age"
 
@@ -109,7 +106,7 @@ class _StorageObject:
     def __eq__(self, other: Any) -> bool:
         if type(self) is not type(other):
             return NotImplemented
-        return bool(self._properties == cast(_StorageObject, other)._properties)
+        return bool(self._properties == other._properties)
 
     def to_dict(self) -> dict[str, Any]:
         """Returns the dictionary backing this object."""
@@ -117,110 +114,185 @@ class _StorageObject:
 
 
 class StorageLifecycleTrigger(_StorageObject):
-    """A trigger for a :class:`StorageLifecycleRule`."""
+    """Base for typed lifecycle triggers. Parse JSON with :meth:`from_dict`."""
 
     @classmethod
-    def create_manual(cls) -> StorageLifecycleTrigger:
-        """Creates a trigger that is invoked manually."""
-        return cls({TYPE_PROP: StorageLifecycleTriggerType.MANUAL})
+    def from_dict(
+        cls, properties: dict[str, Any]
+    ) -> StorageLifecycleDatetimeTrigger | StorageLifecycleAgeTrigger:
+        """Wraps JSON in the concrete model selected by its required type."""
+        type_ = get_required(properties.get(TYPE_PROP), cls, TYPE_PROP)
+        if type_ == "datetime":
+            return StorageLifecycleDatetimeTrigger(properties)
+        if type_ == "age":
+            return StorageLifecycleAgeTrigger(properties)
+        raise ValueError(f"Unsupported lifecycle trigger type: {type_!r}")
 
     @classmethod
-    def create_datetime(cls, at: str) -> StorageLifecycleTrigger:
-        """Creates a trigger for the datetime at the JSON Pointer ``at``."""
-        return cls({TYPE_PROP: StorageLifecycleTriggerType.DATETIME, AT_PROP: at})
+    def create_datetime(cls, at: str) -> StorageLifecycleDatetimeTrigger:
+        """Creates a datetime trigger."""
+        return StorageLifecycleDatetimeTrigger.create(at)
 
     @classmethod
-    def create_age(cls, from_: str, after: str) -> StorageLifecycleTrigger:
-        """Creates a trigger for a duration after the JSON Pointer ``from_``."""
-        return cls(
-            {
-                TYPE_PROP: StorageLifecycleTriggerType.AGE,
-                FROM_PROP: from_,
-                AFTER_PROP: after,
-            }
-        )
+    def create_age(cls, from_: str, after: str) -> StorageLifecycleAgeTrigger:
+        """Creates an age trigger."""
+        return StorageLifecycleAgeTrigger.create(from_, after)
 
     @property
     def type(self) -> str:
-        """Gets or sets the trigger type."""
+        """Gets the discriminator; replace the model to change its type."""
         return cast(str, get_required(self._properties.get(TYPE_PROP), self, TYPE_PROP))
 
-    @type.setter
-    def type(self, v: str) -> None:
-        self._properties[TYPE_PROP] = v
+
+class StorageLifecycleDatetimeTrigger(StorageLifecycleTrigger):
+    """A lifecycle datetime trigger."""
+
+    def __init__(self, properties: dict[str, Any]) -> None:
+        super().__init__(properties)
+        if self.type != "datetime":
+            raise ValueError("Expected lifecycle trigger type: datetime")
+        get_required(properties.get(AT_PROP), self, AT_PROP)
+
+    @classmethod
+    def create(cls, at: str) -> StorageLifecycleDatetimeTrigger:
+        """Creates a datetime trigger with its required fields."""
+        return cls({TYPE_PROP: "datetime", AT_PROP: at})
 
     @property
-    def at(self) -> str | None:
-        """Gets or sets the JSON Pointer used by a ``datetime`` trigger."""
-        return self._properties.get(AT_PROP)
+    def type(self) -> Literal["datetime"]:
+        """Gets the datetime discriminator."""
+        return cast(Literal["datetime"], super().type)
+
+    @property
+    def at(self) -> str:
+        """Gets or sets the JSON Pointer identifying the trigger timestamp."""
+        return cast(str, get_required(self._properties.get(AT_PROP), self, AT_PROP))
 
     @at.setter
-    def at(self, v: str | None) -> None:
-        if v is not None:
-            self._properties[AT_PROP] = v
-        else:
-            self._properties.pop(AT_PROP, None)
+    def at(self, v: str) -> None:
+        self._properties[AT_PROP] = get_required(v, self, AT_PROP)
+
+
+class StorageLifecycleAgeTrigger(StorageLifecycleTrigger):
+    """A lifecycle age trigger."""
+
+    def __init__(self, properties: dict[str, Any]) -> None:
+        super().__init__(properties)
+        if self.type != "age":
+            raise ValueError("Expected lifecycle trigger type: age")
+        get_required(properties.get(FROM_PROP), self, FROM_PROP)
+        get_required(properties.get(AFTER_PROP), self, AFTER_PROP)
+
+    @classmethod
+    def create(cls, from_: str, after: str) -> StorageLifecycleAgeTrigger:
+        """Creates an age trigger with its required fields."""
+        return cls({TYPE_PROP: "age", FROM_PROP: from_, AFTER_PROP: after})
 
     @property
-    def from_(self) -> str | None:
-        """Gets or sets the JSON Pointer used as the origin of an age trigger."""
-        return self._properties.get(FROM_PROP)
+    def type(self) -> Literal["age"]:
+        """Gets the age discriminator."""
+        return cast(Literal["age"], super().type)
+
+    @property
+    def from_(self) -> str:
+        """Gets or sets the JSON Pointer identifying the reference timestamp."""
+        return cast(str, get_required(self._properties.get(FROM_PROP), self, FROM_PROP))
 
     @from_.setter
-    def from_(self, v: str | None) -> None:
-        if v is not None:
-            self._properties[FROM_PROP] = v
-        else:
-            self._properties.pop(FROM_PROP, None)
+    def from_(self, v: str) -> None:
+        self._properties[FROM_PROP] = get_required(v, self, FROM_PROP)
 
     @property
-    def after(self) -> str | None:
-        """Gets or sets the ISO 8601 duration used by an age trigger."""
-        return self._properties.get(AFTER_PROP)
+    def after(self) -> str:
+        """Gets or sets the positive ISO 8601 duration."""
+        return cast(
+            str, get_required(self._properties.get(AFTER_PROP), self, AFTER_PROP)
+        )
 
     @after.setter
-    def after(self, v: str | None) -> None:
-        if v is not None:
-            self._properties[AFTER_PROP] = v
-        else:
-            self._properties.pop(AFTER_PROP, None)
+    def after(self, v: str) -> None:
+        self._properties[AFTER_PROP] = get_required(v, self, AFTER_PROP)
 
 
 class StorageLifecycleAction(_StorageObject):
-    """An action performed by a :class:`StorageLifecycleRule`."""
+    """Base for typed lifecycle actions. Parse JSON with :meth:`from_dict`."""
 
     @classmethod
-    def create_transition(cls, target: str) -> StorageLifecycleAction:
-        """Creates an action that transitions data to the ``target`` scheme."""
-        return cls(
-            {TYPE_PROP: StorageLifecycleActionType.TRANSITION, TARGET_PROP: target}
-        )
+    def from_dict(
+        cls, properties: dict[str, Any]
+    ) -> StorageLifecycleTransitionAction | StorageLifecycleExpireAction:
+        """Wraps JSON in the concrete model selected by its required type."""
+        type_ = get_required(properties.get(TYPE_PROP), cls, TYPE_PROP)
+        if type_ == "transition":
+            return StorageLifecycleTransitionAction(properties)
+        if type_ == "expire":
+            return StorageLifecycleExpireAction(properties)
+        raise ValueError(f"Unsupported lifecycle action type: {type_!r}")
 
     @classmethod
-    def create_expire(cls) -> StorageLifecycleAction:
-        """Creates an action that expires data."""
-        return cls({TYPE_PROP: StorageLifecycleActionType.EXPIRE})
+    def create_transition(cls, target: str) -> StorageLifecycleTransitionAction:
+        """Creates a transition action."""
+        return StorageLifecycleTransitionAction.create(target)
+
+    @classmethod
+    def create_expire(cls) -> StorageLifecycleExpireAction:
+        """Creates an expire action."""
+        return StorageLifecycleExpireAction.create()
 
     @property
     def type(self) -> str:
-        """Gets or sets the action type."""
+        """Gets the discriminator; replace the model to change its type."""
         return cast(str, get_required(self._properties.get(TYPE_PROP), self, TYPE_PROP))
 
-    @type.setter
-    def type(self, v: str) -> None:
-        self._properties[TYPE_PROP] = v
+
+class StorageLifecycleTransitionAction(StorageLifecycleAction):
+    """A lifecycle transition action."""
+
+    def __init__(self, properties: dict[str, Any]) -> None:
+        super().__init__(properties)
+        if self.type != "transition":
+            raise ValueError("Expected lifecycle action type: transition")
+        get_required(properties.get(TARGET_PROP), self, TARGET_PROP)
+
+    @classmethod
+    def create(cls, target: str) -> StorageLifecycleTransitionAction:
+        """Creates a transition action with its required fields."""
+        return cls({TYPE_PROP: "transition", TARGET_PROP: target})
 
     @property
-    def target(self) -> str | None:
-        """Gets or sets the target storage class of a transition action."""
-        return self._properties.get(TARGET_PROP)
+    def type(self) -> Literal["transition"]:
+        """Gets the transition discriminator."""
+        return cast(Literal["transition"], super().type)
+
+    @property
+    def target(self) -> str:
+        """Gets or sets the destination key in storage:schemes."""
+        return cast(
+            str, get_required(self._properties.get(TARGET_PROP), self, TARGET_PROP)
+        )
 
     @target.setter
-    def target(self, v: str | None) -> None:
-        if v is not None:
-            self._properties[TARGET_PROP] = v
-        else:
-            self._properties.pop(TARGET_PROP, None)
+    def target(self, v: str) -> None:
+        self._properties[TARGET_PROP] = get_required(v, self, TARGET_PROP)
+
+
+class StorageLifecycleExpireAction(StorageLifecycleAction):
+    """A lifecycle expire action."""
+
+    def __init__(self, properties: dict[str, Any]) -> None:
+        super().__init__(properties)
+        if self.type != "expire":
+            raise ValueError("Expected lifecycle action type: expire")
+
+    @classmethod
+    def create(cls) -> StorageLifecycleExpireAction:
+        """Creates an expire action with its required fields."""
+        return cls({TYPE_PROP: "expire"})
+
+    @property
+    def type(self) -> Literal["expire"]:
+        """Gets the expire discriminator."""
+        return cast(Literal["expire"], super().type)
 
 
 class StorageLifecycleRule(_StorageObject):
@@ -229,55 +301,30 @@ class StorageLifecycleRule(_StorageObject):
     @classmethod
     def create(
         cls,
-        id: str,
         trigger: StorageLifecycleTrigger,
         action: StorageLifecycleAction,
-        title: str | None = None,
     ) -> StorageLifecycleRule:
         """Creates a storage lifecycle rule."""
         rule = cls({})
-        rule.id = id
-        rule.title = title
         rule.trigger = trigger
         rule.action = action
         return rule
 
     @property
-    def id(self) -> str:
-        """Gets or sets the rule identifier."""
-        return cast(str, get_required(self._properties.get(ID_PROP), self, ID_PROP))
-
-    @id.setter
-    def id(self, v: str) -> None:
-        self._properties[ID_PROP] = v
-
-    @property
-    def title(self) -> str | None:
-        """Gets or sets the human-readable rule title."""
-        return self._properties.get(TITLE_PROP)
-
-    @title.setter
-    def title(self, v: str | None) -> None:
-        if v is not None:
-            self._properties[TITLE_PROP] = v
-        else:
-            self._properties.pop(TITLE_PROP, None)
-
-    @property
-    def trigger(self) -> StorageLifecycleTrigger:
+    def trigger(self) -> StorageLifecycleDatetimeTrigger | StorageLifecycleAgeTrigger:
         """Gets or sets the rule trigger."""
         trigger = get_required(self._properties.get(TRIGGER_PROP), self, TRIGGER_PROP)
-        return StorageLifecycleTrigger(trigger)
+        return StorageLifecycleTrigger.from_dict(trigger)
 
     @trigger.setter
     def trigger(self, v: StorageLifecycleTrigger) -> None:
         self._properties[TRIGGER_PROP] = v.to_dict()
 
     @property
-    def action(self) -> StorageLifecycleAction:
+    def action(self) -> StorageLifecycleTransitionAction | StorageLifecycleExpireAction:
         """Gets or sets the rule action."""
         action = get_required(self._properties.get(ACTION_PROP), self, ACTION_PROP)
-        return StorageLifecycleAction(action)
+        return StorageLifecycleAction.from_dict(action)
 
     @action.setter
     def action(self, v: StorageLifecycleAction) -> None:
@@ -290,7 +337,7 @@ class StorageLifecycle(_StorageObject):
     @classmethod
     def create(
         cls,
-        rules: list[StorageLifecycleRule],
+        rules: dict[str, StorageLifecycleRule],
         managed_by: str | None = None,
     ) -> StorageLifecycle:
         """Creates a storage lifecycle configuration."""
@@ -312,19 +359,19 @@ class StorageLifecycle(_StorageObject):
             self._properties.pop(MANAGED_BY_PROP, None)
 
     @property
-    def rules(self) -> list[StorageLifecycleRule]:
+    def rules(self) -> dict[str, StorageLifecycleRule]:
         """Gets or sets the lifecycle rules."""
         rules = get_required(self._properties.get(RULES_PROP), self, RULES_PROP)
-        return [StorageLifecycleRule(rule) for rule in rules]
+        return {key: StorageLifecycleRule(rule) for key, rule in rules.items()}
 
     @rules.setter
-    def rules(self, v: list[StorageLifecycleRule]) -> None:
-        self._properties[RULES_PROP] = [rule.to_dict() for rule in v]
+    def rules(self, v: dict[str, StorageLifecycleRule]) -> None:
+        self._properties[RULES_PROP] = {key: rule.to_dict() for key, rule in v.items()}
 
-    def add_rule(self, rule: StorageLifecycleRule) -> None:
+    def add_rule(self, key: str, rule: StorageLifecycleRule) -> None:
         """Adds a rule to the lifecycle."""
         rules = get_required(self._properties.get(RULES_PROP), self, RULES_PROP)
-        rules.append(rule.to_dict())
+        rules[key] = rule.to_dict()
 
 
 class StorageScheme:

@@ -2,8 +2,10 @@ import json
 import random
 from copy import deepcopy
 from string import ascii_letters
+from typing import Any
 
 import pytest
+from jsonschema import Draft7Validator, FormatChecker
 
 import pystac
 from pystac import ExtensionTypeError, Item, ItemAssetDefinition
@@ -13,11 +15,13 @@ from pystac.extensions.storage import (
     StorageExtension,
     StorageLifecycle,
     StorageLifecycleAction,
-    StorageLifecycleActionType,
+    StorageLifecycleAgeTrigger,
+    StorageLifecycleDatetimeTrigger,
+    StorageLifecycleExpireAction,
     StorageLifecycleManagedBy,
     StorageLifecycleRule,
+    StorageLifecycleTransitionAction,
     StorageLifecycleTrigger,
-    StorageLifecycleTriggerType,
     StorageScheme,
     StorageSchemeType,
 )
@@ -373,158 +377,226 @@ def test_storage_scheme_storage_class() -> None:
     assert "storage_class" not in scheme.to_dict()
 
 
-def test_storage_lifecycle_trigger_factories() -> None:
-    manual = StorageLifecycleTrigger.create_manual()
-    assert manual.type == StorageLifecycleTriggerType.MANUAL
-    assert manual.to_dict() == {"type": "manual"}
+@pytest.mark.parametrize(
+    "raw, model",
+    [
+        (
+            {"type": "datetime", "at": "/properties/expires"},
+            StorageLifecycleDatetimeTrigger,
+        ),
+        (
+            {"type": "age", "from": "/properties/created", "after": "P30D"},
+            StorageLifecycleAgeTrigger,
+        ),
+        ({"type": "transition", "target": "cold"}, StorageLifecycleTransitionAction),
+        ({"type": "expire"}, StorageLifecycleExpireAction),
+    ],
+)
+def test_storage_lifecycle_dispatch(raw: dict[str, Any], model: type) -> None:
+    base = (
+        StorageLifecycleTrigger
+        if "at" in raw or "after" in raw
+        else StorageLifecycleAction
+    )
+    parsed = base.from_dict(raw)
+    assert isinstance(parsed, model)
+    assert parsed.to_dict() is raw
+    assert parsed.type == raw["type"]
+    with pytest.raises(AttributeError):
+        setattr(parsed, "type", "other")
 
+
+@pytest.mark.parametrize("base", [StorageLifecycleTrigger, StorageLifecycleAction])
+@pytest.mark.parametrize("type_", ["manual", "unknown"])
+def test_storage_lifecycle_unknown_type(
+    base: type[StorageLifecycleTrigger] | type[StorageLifecycleAction], type_: str
+) -> None:
+    with pytest.raises(ValueError, match="Unsupported lifecycle"):
+        base.from_dict({"type": type_})
+
+
+@pytest.mark.parametrize(
+    "model, raw",
+    [
+        (StorageLifecycleDatetimeTrigger, {"type": "datetime"}),
+        (StorageLifecycleAgeTrigger, {"type": "age", "from": "/properties/created"}),
+        (StorageLifecycleAgeTrigger, {"type": "age", "after": "P30D"}),
+        (StorageLifecycleTransitionAction, {"type": "transition"}),
+    ],
+)
+def test_storage_lifecycle_missing_fields(model: type, raw: dict[str, Any]) -> None:
+    with pytest.raises(RequiredPropertyMissing):
+        model(raw)
+    with pytest.raises(ValueError):
+        model({"type": "wrong"})
+
+
+def test_storage_lifecycle_trigger_factories() -> None:
     datetime = StorageLifecycleTrigger.create_datetime("/properties/expires")
-    assert datetime.type == StorageLifecycleTriggerType.DATETIME
-    assert datetime.at == "/properties/expires"
+    assert isinstance(datetime, StorageLifecycleDatetimeTrigger)
+    assert datetime.type == "datetime"
+    datetime.at = "/assets/result/expires"
+    assert datetime.to_dict() == {"type": "datetime", "at": "/assets/result/expires"}
 
     age = StorageLifecycleTrigger.create_age("/properties/datetime", "P30D")
-    assert age.type == StorageLifecycleTriggerType.AGE
-    assert age.from_ == "/properties/datetime"
-    assert age.after == "P30D"
-
+    assert isinstance(age, StorageLifecycleAgeTrigger)
+    assert age.type == "age"
     age.from_ = "/properties/created"
-    age.after = None
+    age.after = "P60D"
     assert age.to_dict() == {
         "type": "age",
         "from": "/properties/created",
+        "after": "P60D",
     }
 
 
 def test_storage_lifecycle_action_factories() -> None:
     transition = StorageLifecycleAction.create_transition("cold")
-    assert transition.type == StorageLifecycleActionType.TRANSITION
-    assert transition.target == "cold"
-
+    assert isinstance(transition, StorageLifecycleTransitionAction)
+    assert transition.type == "transition"
     transition.target = "hot"
     assert transition.to_dict() == {"type": "transition", "target": "hot"}
-
     expire = StorageLifecycleAction.create_expire()
-    assert expire.type == StorageLifecycleActionType.EXPIRE
-    assert expire.target is None
+    assert isinstance(expire, StorageLifecycleExpireAction)
+    assert expire.type == "expire"
+    assert not hasattr(expire, "target")
     assert expire.to_dict() == {"type": "expire"}
 
 
 def test_storage_scheme_lifecycle_round_trip(sample_scheme: StorageScheme) -> None:
-    transition_rule = StorageLifecycleRule.create(
-        id="transition-to-cold",
-        title="Move expired item to cold storage",
-        trigger=StorageLifecycleTrigger.create_datetime("/properties/expires"),
-        action=StorageLifecycleAction.create_transition("cold"),
+    rule = StorageLifecycleRule.create(
+        trigger=StorageLifecycleDatetimeTrigger.create("/properties/expires"),
+        action=StorageLifecycleTransitionAction.create("cold"),
     )
     lifecycle = StorageLifecycle.create(
         managed_by=StorageLifecycleManagedBy.PROVIDER,
-        rules=[transition_rule],
+        rules={"archive": rule},
     )
-
     sample_scheme.lifecycle = lifecycle
-
     serialized = sample_scheme.to_dict()
     assert serialized["lifecycle"] == {
         "managed_by": "provider",
-        "rules": [
-            {
-                "id": "transition-to-cold",
-                "title": "Move expired item to cold storage",
+        "rules": {
+            "archive": {
                 "trigger": {"type": "datetime", "at": "/properties/expires"},
                 "action": {"type": "transition", "target": "cold"},
             }
-        ],
+        },
     }
-
-    parsed_lifecycle = sample_scheme.lifecycle
-    assert parsed_lifecycle is not None
-    assert parsed_lifecycle.managed_by == StorageLifecycleManagedBy.PROVIDER
-    assert parsed_lifecycle.rules[0].id == "transition-to-cold"
-    assert parsed_lifecycle.rules[0].trigger.at == "/properties/expires"
-    assert parsed_lifecycle.rules[0].action.target == "cold"
-
-    parsed_lifecycle.rules[0].action.target = "hot"
-    parsed_lifecycle.add_rule(
+    parsed = sample_scheme.lifecycle
+    assert parsed is not None
+    assert parsed.managed_by == StorageLifecycleManagedBy.PROVIDER
+    action = parsed.rules["archive"].action
+    assert isinstance(action, StorageLifecycleTransitionAction)
+    action.target = "hot"
+    parsed.add_rule(
+        "expire",
         StorageLifecycleRule.create(
-            id="expire",
-            trigger=StorageLifecycleTrigger.create_manual(),
-            action=StorageLifecycleAction.create_expire(),
-        )
+            trigger=StorageLifecycleAgeTrigger.create("/properties/created", "P30D"),
+            action=StorageLifecycleExpireAction.create(),
+        ),
     )
-    assert serialized["lifecycle"]["rules"][0]["action"]["target"] == "hot"
+    assert serialized["lifecycle"]["rules"]["archive"]["action"]["target"] == "hot"
     assert len(serialized["lifecycle"]["rules"]) == 2
-
     sample_scheme.lifecycle = None
     assert sample_scheme.lifecycle is None
     assert "lifecycle" not in sample_scheme.to_dict()
 
 
 def test_storage_scheme_create_accepts_raw_lifecycle() -> None:
-    raw_lifecycle = {
-        "managed_by": "application",
-        "rules": [
-            {
-                "id": "expire",
-                "trigger": {"type": "manual"},
+    raw = {
+        "rules": {
+            "expire": {
+                "trigger": {
+                    "type": "age",
+                    "from": "/properties/created",
+                    "after": "P30D",
+                },
                 "action": {"type": "expire"},
             }
-        ],
+        }
     }
-    scheme = StorageScheme.create(
-        type=StorageSchemeType.CUSTOM_S3,
-        platform="https://{bucket}.storage.example.com",
-        lifecycle=raw_lifecycle,
-    )
-
-    assert scheme.lifecycle == StorageLifecycle(raw_lifecycle)
+    scheme = StorageScheme.create("custom-s3", "https://example.com", lifecycle=raw)
+    assert scheme.lifecycle == StorageLifecycle(raw)
     assert scheme.lifecycle is not None
-    assert scheme.lifecycle.rules[0].action.type == StorageLifecycleActionType.EXPIRE
+    assert isinstance(
+        scheme.lifecycle.rules["expire"].action, StorageLifecycleExpireAction
+    )
 
 
 def test_storage_extension_lifecycle_round_trip(naip_item: Item) -> None:
     lifecycle = StorageLifecycle.create(
-        rules=[
-            StorageLifecycleRule.create(
-                id="transition-after-30-days",
-                trigger=StorageLifecycleTrigger.create_age(
+        rules={
+            "archive": StorageLifecycleRule.create(
+                trigger=StorageLifecycleAgeTrigger.create(
                     "/properties/datetime", "P30D"
                 ),
-                action=StorageLifecycleAction.create_transition("cold"),
+                action=StorageLifecycleTransitionAction.create("cold"),
             )
-        ]
+        }
     )
     storage_ext = StorageExtension.ext(naip_item)
     storage_ext.add_scheme(
         "managed-s3",
         StorageScheme.create(
-            type=StorageSchemeType.AWS_S3,
-            platform="s3://{bucket}/{key}",
+            "aws-s3",
+            "s3://{bucket}/{key}",
             lifecycle=lifecycle,
         ),
     )
-
-    stored_lifecycle = storage_ext.schemes["managed-s3"].lifecycle
-    assert stored_lifecycle is not None
-    assert stored_lifecycle.rules[0].trigger.after == "P30D"
-
-    stored_lifecycle.rules[0].trigger.after = "P60D"
+    item = Item.from_dict(naip_item.to_dict(), migrate=False)
+    stored = StorageExtension.ext(item).schemes["managed-s3"].lifecycle
+    assert stored is not None
+    trigger = stored.rules["archive"].trigger
+    assert isinstance(trigger, StorageLifecycleAgeTrigger)
+    assert trigger.after == "P30D"
+    trigger.after = "P60D"
     assert (
-        naip_item.properties["storage:schemes"]["managed-s3"]["lifecycle"]["rules"][0][
-            "trigger"
-        ]["after"]
+        item.properties["storage:schemes"]["managed-s3"]["lifecycle"]["rules"][
+            "archive"
+        ]["trigger"]["after"]
         == "P60D"
     )
+
+
+def test_storage_lifecycle_proposal_schema() -> None:
+    # Pinned upstream schema at 7927d9b835eb438e0ae9a27c23880d675eba3977.
+    with open(TestCases.get_path("data-files/storage/schema-pr30.json")) as f:
+        schema = json.load(f)
+    validator = Draft7Validator(
+        {"$ref": "#/definitions/lifecycle", "definitions": schema["definitions"]},
+        format_checker=FormatChecker(),
+    )
+    lifecycle = StorageLifecycle.create(
+        rules={
+            "archive": StorageLifecycleRule.create(
+                StorageLifecycleAgeTrigger.create("/properties/created", "P30D"),
+                StorageLifecycleTransitionAction.create("cold"),
+            ),
+            "expire": StorageLifecycleRule.create(
+                StorageLifecycleDatetimeTrigger.create("/assets/result/expires"),
+                StorageLifecycleExpireAction.create(),
+            ),
+        }
+    )
+    validator.validate(lifecycle.to_dict())
+    parsed = lifecycle.rules["archive"].trigger
+    if parsed.type == "age":
+        assert parsed.after == "P30D"
+    else:
+        pytest.fail("Expected an age trigger")
 
 
 def test_storage_lifecycle_required_properties() -> None:
     with pytest.raises(RequiredPropertyMissing, match="rules"):
         _ = StorageLifecycle({}).rules
-
     with pytest.raises(RequiredPropertyMissing, match="trigger"):
         _ = StorageLifecycleRule({}).trigger
-
-    with pytest.raises(RequiredPropertyMissing, match="type"):
-        _ = StorageLifecycleTrigger({}).type
+    with pytest.raises(RequiredPropertyMissing, match="action"):
+        _ = StorageLifecycleRule({}).action
+    for base in (StorageLifecycleTrigger, StorageLifecycleAction):
+        with pytest.raises(RequiredPropertyMissing, match="type"):
+            base.from_dict({})
 
 
 def test_item_asset_accessor() -> None:
